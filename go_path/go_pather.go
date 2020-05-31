@@ -1,0 +1,37 @@
+package go_path
+
+import paths "github.com/wojnosystems/go-path"
+
+// Pather is an abstract go Struct-path
+// This is a way of identifying go variables or structs or maps
+type Pather interface {
+	// Inherit everything about generic paths
+	paths.Pather
+	// Allow copies to be made
+	Copy() Pather
+}
+
+type Appender interface {
+	// Append a component to the end of the path
+	Append(...Componenter)
+}
+
+type Popper interface {
+	Pop(count uint)
+}
+
+type Prepender interface {
+	Prepend(components ...Componenter)
+}
+
+type PopFronter interface {
+	PopFront(count uint)
+}
+
+type PathMutator interface {
+	Pather
+	Appender
+	Popper
+	Prepender
+	PopFronter
+}
