@@ -1,8 +1,10 @@
 package go_path
 
 import (
+	"fmt"
 	"github.com/wojnosystems/go-path"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -43,49 +45,34 @@ func (p goPath) Serialize() string {
 	return sb.String()
 }
 
-func Parse(path string) (out Pather, err error) {
-	if "" == path {
-		return NewRoot(), nil
-	}
+func Parse(reader io.Reader) (out Pather, err error) {
+	lex := newLexer(reader)
+	go lex.lex()
 	outGo := NewRoot()
-	var part Componenter
-	switch parseComponentType(path) {
-	case componentTypeStruct:
-		part, err = parseInstanceVariableName
-		outGo.Append()
-	}
-	return out, nil
-}
-
-func splitComponents(path string) (components []string, err error) {
-	components = make([]string, 0, 10)
-	remaining := path
-	for {
-		// nothing to parse
-		if len(remaining) == 0 {
-			return
-		}
-		structStart := strings.Index(path, ".")
-		indexedStart := strings.Index(path, "[")
-		if -1 == structStart && -1 == indexedStart {
-			// didn't find the end, this is the last component
-			components = append(components, remaining)
-			remaining = ""
-			return
-		} else {
-			startOfNextPart := minInt(indexedStart, structStart)
-			if -1 == startOfNextPart {
-				// one of them was -1...
-				if -1 == indexedStart {
-					startOfNextPart = structStart
-				} else {
-					startOfNextPart = indexedStart
-				}
+	continueParsing := true
+	for continueParsing {
+		item := lex.getNextItem()
+		switch item.typ {
+		case itemError:
+			continueParsing = false
+			err = fmt.Errorf("error parsing: \"%s\" #line%d:%d", item.val, item.line, item.col)
+		case itemVariableName:
+			outGo.Append(NewInstanceVariableNamed(item.val))
+		case itemMapKey:
+			outGo.Append(NewMapKey(item.val))
+		case itemArrayIndex:
+			var val int64
+			val, err = strconv.ParseInt(item.val, 10, 64)
+			if err != nil {
+				return
 			}
-			components = append(components, remaining[0:startOfNextPart])
-			remaining = remaining[startOfNextPart:]
+			outGo.Append(NewArrayIndex(int(val)))
+		case itemEOF:
+			continueParsing = false
 		}
 	}
+	lex.drain()
+	return outGo, err
 }
 
 func (p goPath) Copy() Pather {
