@@ -84,14 +84,8 @@ var key = map[string]token{
 	"\"": itemQuoteDouble,
 }
 
-type nextState struct {
-	triggeringToken token
-	next            *lexerState
-}
-
 type lexerState struct {
-	parse      func(l *lexer) *lexerState
-	nextStates []nextState
+	parse func(l *lexer) *lexerState
 }
 
 var (
@@ -101,9 +95,9 @@ var (
 	stateItemSquareBracketOpen  *lexerState
 	stateItemSquareBracketClose *lexerState
 	stateItemMapKey             *lexerState
+	stateItemMapKeyEnd          *lexerState
 	stateItemArrayIndex         *lexerState
 	stateItemDot                *lexerState
-	stateItemMapKeyString       *lexerState
 	stateStart                  *lexerState
 )
 
@@ -208,47 +202,18 @@ func (l *lexer) drain() {
 }
 
 func initializeStateVariables() {
-	stateEnd = &lexerState{
-		nextStates: []nextState{},
-	}
-	stateError = &lexerState{
-		nextStates: []nextState{},
-	}
+	stateEnd = &lexerState{}
+	stateError = &lexerState{}
 
-	stateItemVariableName = &lexerState{
-		nextStates: make([]nextState, 0),
-	}
-	stateItemSquareBracketOpen = &lexerState{
-		nextStates: make([]nextState, 0),
-	}
-	stateItemSquareBracketClose = &lexerState{
-		nextStates: make([]nextState, 0),
-	}
-	stateItemMapKey = &lexerState{
-		nextStates: make([]nextState, 0),
-	}
-	stateItemArrayIndex = &lexerState{
-		nextStates: make([]nextState, 0),
-	}
-	stateItemDot = &lexerState{
-		nextStates: make([]nextState, 0),
-	}
-	stateItemMapKeyString = &lexerState{
-		nextStates: make([]nextState, 0),
-	}
+	stateItemVariableName = &lexerState{}
+	stateItemSquareBracketOpen = &lexerState{}
+	stateItemSquareBracketClose = &lexerState{}
+	stateItemMapKey = &lexerState{}
+	stateItemMapKeyEnd = &lexerState{}
+	stateItemArrayIndex = &lexerState{}
+	stateItemDot = &lexerState{}
 
-	stateStart = &lexerState{
-		nextStates: make([]nextState, 0),
-	}
-}
-
-func moveToNextState(states []nextState, t token) *lexerState {
-	for _, state := range states {
-		if state.triggeringToken == t {
-			return state.next
-		}
-	}
-	return stateError
+	stateStart = &lexerState{}
 }
 
 func (l *lexer) returnStateError(err error) *lexerState {
@@ -258,56 +223,50 @@ func (l *lexer) returnStateError(err error) *lexerState {
 }
 
 func isIdentRune(r rune) bool {
-	return r < utf8.MaxRune && !unicode.IsSpace(r)
+	return r < utf8.MaxRune && !unicode.IsSpace(r) && r != '.'
 }
 
-func (l *lexer) handleEOFOrError(err error, emitEvent token) *lexerState {
+func isNumber(r rune) bool {
+	return '0' <= r && r <= '9'
+}
+
+func isQuoteDouble(r rune) bool {
+	return '"' == r
+}
+
+func isEscapeChar(r rune) bool {
+	return '\\' == r
+}
+
+func (l *lexer) handleEOFOrError(err error, emitEventIfEOF token) *lexerState {
 	if err != nil && err != io.EOF {
 		return l.returnStateError(err)
 	}
 	if err == io.EOF {
-		l.emit(emitEvent)
-		return moveToNextState(stateStart.nextStates, itemEOF)
+		l.emit(emitEventIfEOF)
+		return stateEnd
 	}
 	return nil
 }
 
-func (l *lexer) moveToTokenNextState(r rune, nextStates []nextState) *lexerState {
-	if t, ok := key[string(r)]; ok {
-		l.ignore() // consume the peeked value
-		return moveToNextState(nextStates, t)
-	}
-	return nil
+func (l *lexer) returnErrorUnexpectedRune(r rune) *lexerState {
+	return l.returnStateError(fmt.Errorf("unexpected rune: '%c'", r))
 }
 
 func linkNextStates() {
-	stateStart.nextStates = append(stateStart.nextStates,
-		nextState{
-			triggeringToken: itemVariableName,
-			next:            stateItemVariableName,
-		},
-		nextState{
-			triggeringToken: itemSquareBracketOpen,
-			next:            stateItemSquareBracketOpen,
-		},
-		nextState{
-			triggeringToken: itemEOF,
-			next:            stateEnd,
-		},
-	)
 	stateStart.parse = func(l *lexer) *lexerState {
 		r, err := l.peek()
 		if nextState := l.handleEOFOrError(err, itemEOF); nextState != nil {
 			return nextState
 		}
-		if nextState := l.moveToTokenNextState(r, stateStart.nextStates); nextState != nil {
-			return nextState
-		}
-		if isIdentRune(r) {
+		switch {
+		case '[' == r:
+			l.ignore()
+			return stateItemSquareBracketOpen
+		case isIdentRune(r):
 			return stateItemVariableName
-		} else {
-			// invalid character
-			return l.returnStateError(fmt.Errorf("unexpected rune: '%c'", r))
+		default:
+			return l.returnErrorUnexpectedRune(r)
 		}
 	}
 
@@ -316,50 +275,32 @@ func linkNextStates() {
 		return nil
 	}
 
-	stateItemVariableName.nextStates = append(stateItemVariableName.nextStates,
-		nextState{
-			triggeringToken: itemDot,
-			next:            stateItemDot,
-		},
-		nextState{
-			triggeringToken: itemSquareBracketOpen,
-			next:            stateItemSquareBracketOpen,
-		},
-		nextState{
-			triggeringToken: itemEOF,
-			next:            stateEnd,
-		},
-	)
 	stateItemVariableName.parse = func(l *lexer) *lexerState {
 		for {
 			r, err := l.peek()
 			if nextState := l.handleEOFOrError(err, itemVariableName); nextState != nil {
 				return nextState
 			}
-
-			if t, ok := key[string(r)]; ok {
-				l.ignore() // consume the peeked value
+			switch {
+			case '.' == r:
+				l.ignore()
 				l.emit(itemVariableName)
-				return moveToNextState(stateItemVariableName.nextStates, t)
-			}
-			if isIdentRune(r) {
+				return stateItemDot
+			case '[' == r:
+				l.ignore()
+				l.emit(itemVariableName)
+				return stateItemSquareBracketOpen
+			case isIdentRune(r):
 				err = l.accept()
 				if err != nil {
 					return l.returnStateError(err)
 				}
-			} else {
-				// invalid character
-				return l.returnStateError(fmt.Errorf("unexpected rune: '%c'", r))
+			default:
+				return l.returnErrorUnexpectedRune(r)
 			}
 		}
 	}
 
-	stateItemDot.nextStates = append(stateItemDot.nextStates,
-		nextState{
-			triggeringToken: itemVariableName,
-			next:            stateItemVariableName,
-		},
-	)
 	stateItemDot.parse = func(l *lexer) *lexerState {
 		r, err := l.peek()
 		if nextState := l.handleEOFOrError(err, itemError); nextState != nil {
@@ -369,62 +310,104 @@ func linkNextStates() {
 			return stateItemVariableName
 		} else {
 			// invalid character
-			return l.returnStateError(fmt.Errorf("unexpected rune: '%c'", r))
+			return l.returnErrorUnexpectedRune(r)
 		}
 	}
 
-	stateItemSquareBracketOpen.nextStates = append(stateItemSquareBracketOpen.nextStates,
-		nextState{
-			triggeringToken: itemArrayIndex,
-			next:            stateItemArrayIndex,
-		},
-		nextState{
-			triggeringToken: itemQuoteDouble,
-			next:            stateItemMapKeyString,
-		},
-	)
 	stateItemSquareBracketOpen.parse = func(l *lexer) *lexerState {
 		r, err := l.peek()
 		if nextState := l.handleEOFOrError(err, itemError); nextState != nil {
 			return nextState
 		}
+		switch {
+		case isQuoteDouble(r):
+			l.ignore()
+			return stateItemMapKey
+		case isNumber(r):
+			return stateItemArrayIndex
+		default:
+			return l.returnErrorUnexpectedRune(r)
+		}
 	}
 
-	stateItemMapKeyString.nextStates = append(stateItemMapKeyString.nextStates,
-		nextState{
-			triggeringToken: itemMapKey,
-			next:            stateItemMapKey,
-		},
-	)
+	stateItemMapKey.parse = func(l *lexer) *lexerState {
+		isEscaped := false
+		for {
+			r, err := l.peek()
+			if nextState := l.handleEOFOrError(err, itemError); nextState != nil {
+				return nextState
+			}
+			if !isEscaped && isQuoteDouble(r) {
+				l.ignore()
+				l.emit(itemMapKey)
+				return stateItemMapKeyEnd
+			}
+			if isEscapeChar(r) {
+				if isEscaped {
+					isEscaped = false
+				} else {
+					isEscaped = true
+				}
+			}
+			err = l.accept()
+			if nil != err {
+				return l.returnStateError(err)
+			}
+		}
+	}
 
-	stateItemMapKey.nextStates = append(stateItemMapKey.nextStates,
-		nextState{
-			triggeringToken: itemQuoteDouble,
-			next:            stateItemSquareBracketClose,
-		},
-	)
+	stateItemMapKeyEnd.parse = func(l *lexer) *lexerState {
+		r, err := l.peek()
+		if nextState := l.handleEOFOrError(err, itemError); nextState != nil {
+			return nextState
+		}
+		switch {
+		case r != ']':
+			return l.returnErrorUnexpectedRune(r)
+		default:
+			l.ignore()
+			return stateItemSquareBracketClose
+		}
+	}
 
-	stateItemArrayIndex.nextStates = append(stateItemArrayIndex.nextStates,
-		nextState{
-			triggeringToken: itemSquareBracketClose,
-			next:            stateItemSquareBracketClose,
-		},
-	)
+	stateItemArrayIndex.parse = func(l *lexer) *lexerState {
+		for {
+			r, err := l.peek()
+			if nextState := l.handleEOFOrError(err, itemError); nextState != nil {
+				return nextState
+			}
+			switch {
+			case r == ']':
+				l.ignore()
+				l.emit(itemArrayIndex)
+				return stateItemSquareBracketClose
+			case isNumber(r):
+				err = l.accept()
+				if err != nil {
+					return l.returnStateError(err)
+				}
+			default:
+				return l.returnErrorUnexpectedRune(r)
+			}
+		}
+	}
 
-	stateItemSquareBracketClose.nextStates = append(stateItemSquareBracketClose.nextStates,
-		nextState{
-			triggeringToken: itemDot,
-			next:            stateItemDot,
-		},
-		nextState{
-			triggeringToken: itemSquareBracketOpen,
-			next:            stateItemSquareBracketOpen,
-		},
-		nextState{
-			triggeringToken: itemEOF,
-			next:            stateEnd,
-		},
-	)
+	stateItemSquareBracketClose.parse = func(l *lexer) *lexerState {
+		r, err := l.peek()
+		if nextState := l.handleEOFOrError(err, itemEOF); nextState != nil {
+			return nextState
+		}
+		switch r {
+		case '.':
+			l.ignore()
+			return stateItemDot
+		case '[':
+			l.ignore()
+			return stateItemSquareBracketOpen
+		default:
+			return l.returnErrorUnexpectedRune(r)
+		}
+	}
 }
 
 func init() {
