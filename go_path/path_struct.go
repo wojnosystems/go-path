@@ -23,6 +23,6 @@ func (p pathStructInstanceVariable) IsEqual(componenter paths.Componenter) bool 
 	}
 }
 
-func (p pathStructInstanceVariable) Serialize() string {
-	return "." + p.variableName
+func (p pathStructInstanceVariable) String() string {
+	return p.variableName
 }

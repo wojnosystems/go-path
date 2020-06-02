@@ -34,15 +34,24 @@ func (p goPath) IsEqual(compareWith path.Pather) bool {
 	}
 }
 
-func (p goPath) Serialize() string {
+func (p goPath) serialize() string {
 	if len(p.parts) == 0 {
 		return ""
 	}
 	sb := strings.Builder{}
-	for _, component := range p.parts {
-		sb.WriteString(component.Serialize())
+	for i, component := range p.parts {
+		if i != 0 {
+			if _, ok := component.(*pathStructInstanceVariable); ok {
+				sb.WriteString(".")
+			}
+		}
+		sb.WriteString(component.String())
 	}
 	return sb.String()
+}
+
+func (p goPath) String() string {
+	return p.serialize()
 }
 
 func Parse(reader io.Reader) (out Pather, err error) {
@@ -55,7 +64,7 @@ func Parse(reader io.Reader) (out Pather, err error) {
 		switch item.typ {
 		case itemError:
 			continueParsing = false
-			err = fmt.Errorf("error parsing: \"%s\" #line%d:%d", item.val, item.line, item.col)
+			err = fmt.Errorf("error parsing: \"%s\" #line %d:%d", item.val, item.line, item.col)
 		case itemVariableName:
 			outGo.Append(NewInstanceVariableNamed(item.val))
 		case itemMapKey:

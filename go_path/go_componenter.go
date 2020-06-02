@@ -6,6 +6,4 @@ import paths "github.com/wojnosystems/go-path"
 type Componenter interface {
 	// Inherit everything about generic Components
 	paths.Componenter
-	// string debugging
-	Serialize() string
 }

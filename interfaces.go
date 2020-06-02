@@ -6,6 +6,9 @@ type Pather interface {
 	// IsEqual
 	// @return true if paths identify the same resource, false if not
 	IsEqual(Pather) bool
+
+	// String representation of the Path
+	String() string
 }
 
 // Componenter is an abstract Path component
@@ -13,4 +16,7 @@ type Componenter interface {
 	// IsEqual
 	// @return true if the components identify the same object, assuming these are evaluated at the same location in the Path
 	IsEqual(Componenter) bool
+
+	// String representation of the Component
+	String() string
 }

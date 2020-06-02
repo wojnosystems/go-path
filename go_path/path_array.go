@@ -26,6 +26,6 @@ func (p pathArrayInstanceVariable) IsEqual(componenter paths.Componenter) bool {
 	}
 }
 
-func (p pathArrayInstanceVariable) Serialize() string {
+func (p pathArrayInstanceVariable) String() string {
 	return fmt.Sprintf("[%d]", p.index)
 }

@@ -169,3 +169,33 @@ func TestParse(t *testing.T) {
 		}
 	}
 }
+
+func TestGoPath_String(t *testing.T) {
+	cases := map[string]struct {
+		input func() Pather
+	}{
+		"blank": {
+			input: func() Pather {
+				return NewRoot()
+			},
+		},
+		"every element": {
+			input: func() Pather {
+				p := NewRoot()
+				p.Append(NewInstanceVariableNamed("dogs"))
+				p.Append(NewArrayIndex(10))
+				p.Append(NewMapKey("attributes"))
+				return p
+			},
+		},
+	}
+
+	for caseName, c := range cases {
+		expected := c.input()
+		stringValue := expected.String()
+		stringBuf := bytes.NewBufferString(stringValue)
+		actual, err := Parse(stringBuf)
+		require.NoError(t, err, caseName)
+		assert.True(t, expected.IsEqual(actual), caseName)
+	}
+}

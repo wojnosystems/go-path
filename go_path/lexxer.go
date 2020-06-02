@@ -216,7 +216,8 @@ func initializeStateVariables() {
 }
 
 func (l *lexer) returnStateError(err error) *lexerState {
-	copy(l.currentValue, []rune(err.Error()))
+	errorString := []rune(err.Error())
+	l.currentValue = append(l.currentValue, errorString...)
 	l.emit(itemError)
 	return stateError
 }
@@ -249,7 +250,7 @@ func (l *lexer) handleEOFOrError(err error, emitEventIfEOF token) *lexerState {
 }
 
 func (l *lexer) returnErrorUnexpectedRune(r rune) *lexerState {
-	return l.returnStateError(fmt.Errorf("unexpected rune: '%c'", r))
+	return l.returnStateError(fmt.Errorf("unexpected rune: '%s'", string(r)))
 }
 
 func linkNextStates() {

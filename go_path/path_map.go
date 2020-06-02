@@ -23,6 +23,6 @@ func (p pathMapInstanceVariable) IsEqual(componenter paths.Componenter) bool {
 	}
 }
 
-func (p pathMapInstanceVariable) Serialize() string {
-	return "[" + p.variableName + "]"
+func (p pathMapInstanceVariable) String() string {
+	return "[\"" + p.variableName + "\"]"
 }
