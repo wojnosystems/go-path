@@ -7,7 +7,6 @@ import (
 	"github.com/wojnosystems/go-optional"
 	"io"
 	"unicode"
-	"unicode/utf8"
 )
 
 // Parses go-path strings into the Pather object that it represents
@@ -135,7 +134,7 @@ func (l *lexer) appendCurrent(r rune) error {
 }
 
 func (l *lexer) lex() {
-	for state := stateStart; state != nil; {
+	for state := stateStart; state != nil && state != stateError; {
 		state = state.parse(l)
 	}
 	close(l.itemEmitter)
@@ -222,12 +221,12 @@ func (l *lexer) returnStateError(err error) *lexerState {
 	return stateError
 }
 
-func isIdentRune(r rune) bool {
-	return r < utf8.MaxRune && !unicode.IsSpace(r) && r != '.'
+func isAlphaNumeric(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
 func isNumber(r rune) bool {
-	return '0' <= r && r <= '9'
+	return unicode.IsDigit(r)
 }
 
 func isQuoteDouble(r rune) bool {
@@ -263,7 +262,7 @@ func linkNextStates() {
 		case '[' == r:
 			l.ignore()
 			return stateItemSquareBracketOpen
-		case isIdentRune(r):
+		case isAlphaNumeric(r):
 			return stateItemVariableName
 		default:
 			return l.returnErrorUnexpectedRune(r)
@@ -290,7 +289,7 @@ func linkNextStates() {
 				l.ignore()
 				l.emit(itemVariableName)
 				return stateItemSquareBracketOpen
-			case isIdentRune(r):
+			case isAlphaNumeric(r):
 				err = l.accept()
 				if err != nil {
 					return l.returnStateError(err)
@@ -306,7 +305,7 @@ func linkNextStates() {
 		if nextState := l.handleEOFOrError(err, itemError); nextState != nil {
 			return nextState
 		}
-		if isIdentRune(r) {
+		if isAlphaNumeric(r) {
 			return stateItemVariableName
 		} else {
 			// invalid character

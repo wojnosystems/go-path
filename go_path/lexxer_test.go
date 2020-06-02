@@ -9,8 +9,9 @@ import (
 
 func TestParse(t *testing.T) {
 	cases := map[string]struct {
-		input    string
-		expected func() Pather
+		input       string
+		expected    func() Pather
+		expectedErr bool
 	}{
 		"empty": {
 			input: "",
@@ -120,12 +121,51 @@ func TestParse(t *testing.T) {
 				return r
 			},
 		},
+		"interrupted variable": {
+			input: "dogs]good",
+			expected: func() Pather {
+				return nil
+			},
+			expectedErr: true,
+		},
+		"unclosed array index": {
+			input: "[2",
+			expected: func() Pather {
+				return nil
+			},
+			expectedErr: true,
+		},
+		"unclosed map index": {
+			input: "[\"d\"",
+			expected: func() Pather {
+				return nil
+			},
+			expectedErr: true,
+		},
+		"unclosed map string": {
+			input: "[\"d]",
+			expected: func() Pather {
+				return nil
+			},
+			expectedErr: true,
+		},
+		"invalidCharInVariable": {
+			input: "pu ppy",
+			expected: func() Pather {
+				return nil
+			},
+			expectedErr: true,
+		},
 	}
 
 	for caseName, c := range cases {
 		in := bytes.NewBufferString(c.input)
 		actual, err := Parse(in)
-		require.NoError(t, err, caseName)
-		assert.True(t, c.expected().IsEqual(actual), caseName)
+		if c.expectedErr {
+			assert.Error(t, err, caseName)
+		} else {
+			require.NoError(t, err, caseName)
+			assert.True(t, c.expected().IsEqual(actual), caseName)
+		}
 	}
 }
