@@ -8,7 +8,7 @@ type Pather interface {
 	// Inherit everything about generic paths
 	paths.Pather
 	// Allow copies to be made
-	Copy() Pather
+	Copy() PathMutator
 }
 
 type Appender interface {

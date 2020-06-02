@@ -84,7 +84,7 @@ func Parse(reader io.Reader) (out Pather, err error) {
 	return outGo, err
 }
 
-func (p goPath) Copy() Pather {
+func (p goPath) Copy() PathMutator {
 	newCopy := NewRoot()
 	for _, part := range p.parts {
 		newCopy.Append(part)
