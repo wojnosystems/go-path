@@ -28,10 +28,15 @@ type PopFronter interface {
 	PopFront(count uint)
 }
 
+type Eacher interface {
+	Each(func(index int, componenter Componenter))
+}
+
 type PathMutator interface {
 	Pather
 	Appender
 	Popper
 	Prepender
 	PopFronter
+	Eacher
 }

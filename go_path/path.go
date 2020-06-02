@@ -124,3 +124,9 @@ func (p *goPath) PopFront(count uint) {
 	}
 	p.parts = newParts
 }
+
+func (p *goPath) Each(yield func(index int, componenter Componenter)) {
+	for index, part := range p.parts {
+		yield(index, part)
+	}
+}
