@@ -18,6 +18,12 @@ func NewRoot() PathMutator {
 	}
 }
 
+func New(components ...Componenter) PathMutator {
+	n := NewRoot()
+	n.Append(components...)
+	return n
+}
+
 func (p goPath) IsEqual(compareWith path.Pather) bool {
 	if compareWithGo, ok := compareWith.(*goPath); !ok {
 		return false
